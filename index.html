@@ -27,7 +27,7 @@
           </span>
           <h1 class="text-2xl font-bold text-slate-900 tracking-tight">中醫處方分組與每日劑量換算器</h1>
         </div>
-        <p class="text-sm text-slate-500 mt-1">自動解析 HIS 複製處方，支援水煎飲片（錢）與濃縮粉劑（g）獨立分組換算</p>
+        <p class="text-sm text-slate-500 mt-1">智慧校正 HIS 四捨五入誤差 · 水煎飲片（錢）與濃縮粉劑（g）獨立分組病歷產出</p>
       </div>
       <div class="flex items-center gap-2 mt-4 md:mt-0">
         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -46,12 +46,15 @@
             <label for="hisInput" class="text-sm font-bold text-slate-700 flex items-center gap-1.5">
               <i class="fa-solid fa-clipboard-list text-emerald-600"></i> HIS 處方貼上區
             </label>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-1.5">
               <button id="btnSamplePowder" class="text-xs text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded transition">
-                範例粉劑
+                粉劑範例
               </button>
               <button id="btnSampleHerb" class="text-xs text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded transition">
-                範例飲片
+                飲片範例
+              </button>
+              <button id="btnSampleEdgeCase" class="text-xs text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded border border-amber-200 transition" title="測試 0.08 BID 7天 總量 1.1 的自動修正">
+                0.08誤差測試
               </button>
               <button id="btnClear" class="text-xs text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded transition">
                 清空
@@ -66,8 +69,13 @@
 
           <!-- Configuration Controls -->
           <div class="mt-4 pt-4 border-t border-slate-100 space-y-2.5">
-            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">轉換設定</div>
+            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">智慧換算設定</div>
             
+            <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-700 hover:text-slate-900">
+              <input type="checkbox" id="optSnapGrid" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300">
+              <span class="font-medium text-emerald-950">啟用臨床刻度正向驗算（精確還原 0.08 BID ➔ 0.15g）</span>
+            </label>
+
             <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-700 hover:text-slate-900">
               <input type="checkbox" id="optNormalizeName" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300">
               <span>中藥名智慧標準化（如：地黃(生)➔生地、(炒)杜仲(自)➔炒杜仲、去除☆與自費標記）</span>
@@ -79,8 +87,8 @@
             </label>
 
             <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-700 hover:text-slate-900">
-              <input type="checkbox" id="optTrimZero" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300">
-              <span>劑量維持至少一位小數（如 1.0g、2.0錢）</span>
+              <input type="checkbox" id="optSmartDecimals" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300">
+              <span>智慧小數顯示（無多餘零時維持1位，若為 0.15/0.75 等保留2位）</span>
             </label>
           </div>
 
@@ -116,9 +124,7 @@
         </div>
 
         <!-- Detailed Audit Groups -->
-        <div id="groupsDetailContainer" class="space-y-4">
-          <!-- Dynamic group cards rendered here -->
-        </div>
+        <div id="groupsDetailContainer" class="space-y-4"></div>
 
       </div>
     </div>
@@ -159,24 +165,26 @@
     // 範例資料：生藥材飲片
     const SAMPLE_HERB = `CHDG\n \n當歸(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHNJTZ\n \n女貞子(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHHLTS\n \n旱蓮草(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHCHCHIU\n \n川芎(酒)(自)\n1.0\n錢\nBID\n14\nPO\nPC\n28.0\nCHSHI\n \n山藥(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHFSH2\n \n☆茯神(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHCHP3\n \n陳皮(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHSHF\n \n香附(製)(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHHCH\n \n黃耆(生)(自)\n1.75\n錢\nBID\n14\nPO\nPC\n49.0\nCHSHH\n \n石斛(釵)(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHDS2\n \n黨參(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHDJ2\n \n(炒)杜仲(自)\n1.75\n錢\nBID\n14\nPO\nPC\n49.0\nCHGTSJ\n \n(炙)甘草(自)\n0.75\n錢\nBID\n14\nPO\nPC\n21.0\nCHSHICH\n \n(赤)芍藥(自)\n1.0\n錢\nBID\n14\nPO\nPC\n28.0`;
 
-    // 元素參照
+    // 範例資料：四捨五入陷阱 (0.08 BID 7天 總量1.1)
+    const SAMPLE_EDGE_CASE = `CPMH1\n \n麻黃\n0.08\nGM\nBID\n7\nPO\nPC\n1.1\nCPXF1\n \n杏仁\n0.5\nGM\nBID\n7\nPO\nPC\n7.0\nCPGC1\n \n甘草\n0.25\nGM\nBID\n7\nPO\nPC\n3.5`;
+
     const hisInput = document.getElementById('hisInput');
     const btnParse = document.getElementById('btnParse');
     const btnClear = document.getElementById('btnClear');
     const btnSamplePowder = document.getElementById('btnSamplePowder');
     const btnSampleHerb = document.getElementById('btnSampleHerb');
+    const btnSampleEdgeCase = document.getElementById('btnSampleEdgeCase');
     const btnCopyAll = document.getElementById('btnCopyAll');
     const quickOutputContainer = document.getElementById('quickOutputContainer');
     const groupsDetailContainer = document.getElementById('groupsDetailContainer');
     const badgeCount = document.getElementById('badgeCount');
+    const optSnapGrid = document.getElementById('optSnapGrid');
     const optNormalizeName = document.getElementById('optNormalizeName');
     const optCleanBrackets = document.getElementById('optCleanBrackets');
-    const optTrimZero = document.getElementById('optTrimZero');
+    const optSmartDecimals = document.getElementById('optSmartDecimals');
 
-    // 儲存目前解析群組資料
     let currentParsedGroups = [];
 
-    // 載入預設
     btnSamplePowder.addEventListener('click', () => {
       hisInput.value = SAMPLE_POWDER;
       parseAndRender();
@@ -184,6 +192,11 @@
 
     btnSampleHerb.addEventListener('click', () => {
       hisInput.value = SAMPLE_HERB;
+      parseAndRender();
+    });
+
+    btnSampleEdgeCase.addEventListener('click', () => {
+      hisInput.value = SAMPLE_EDGE_CASE;
       parseAndRender();
     });
 
@@ -202,13 +215,13 @@
     });
 
     btnParse.addEventListener('click', parseAndRender);
-    [optNormalizeName, optCleanBrackets, optTrimZero].forEach(el => {
+    [optSnapGrid, optNormalizeName, optCleanBrackets, optSmartDecimals].forEach(el => {
       el.addEventListener('change', () => {
         if (hisInput.value.trim()) parseAndRender();
       });
     });
 
-    // 核心解析邏輯
+    // 核心解析
     function parseAndRender() {
       const text = hisInput.value.trim();
       if (!text) {
@@ -230,7 +243,6 @@
         return;
       }
 
-      // 依 【類別 (粉劑/飲片) + 頻次 + 天數】 進行分組
       const groupsMap = new Map();
 
       rows.forEach(item => {
@@ -252,19 +264,21 @@
         }
 
         const group = groupsMap.get(groupKey);
-        const dailyDose = round(item.singleDose * group.timesPerDay, 3);
+        
+        // 取得精準每日劑量（含正向模擬吸附）
+        const resolved = resolveDailyDoseSmart(item.singleDose, group.timesPerDay, item.days, item.totalDose);
         const cleanedName = cleanMedicineName(item.rawName);
 
         group.items.push({
           ...item,
           displayName: cleanedName,
-          dailyDose: dailyDose
+          dailyDose: resolved.dailyDose,
+          isCorrected: resolved.isCorrected
         });
       });
 
-      // 排序分組：飲片在前或粉劑在前可視慣例，此處依天數及頻次次數排序
       currentParsedGroups = Array.from(groupsMap.values()).sort((a, b) => {
-        if (a.type !== b.type) return a.type === '粉劑' ? -1 : 1; // 粉劑優先
+        if (a.type !== b.type) return a.type === '粉劑' ? -1 : 1;
         if (b.timesPerDay !== a.timesPerDay) return b.timesPerDay - a.timesPerDay;
         return b.days - a.days;
       });
@@ -272,49 +286,86 @@
       renderResults(currentParsedGroups);
     }
 
-    // 將輸入字串轉化為標準結構列
+    // 核心演算法：正向模擬驗算（Snap-to-Grid）
+    function resolveDailyDoseSmart(singleDose, timesPerDay, days, totalDose) {
+      const directDaily = singleDose * timesPerDay;
+
+      // 若未啟用或無總量天數資料，退回直接乘積
+      if (!optSnapGrid.checked || isNaN(totalDose) || !days || days <= 0) {
+        return { dailyDose: round(directDaily, 4), isCorrected: false };
+      }
+
+      const rawDailyFromTotal = totalDose / days;
+
+      // 候選刻度：在中醫臨床以 0.05 為主要解析度（0.05, 0.10, 0.15, 0.20, 0.25...）
+      const step = 0.05;
+      const candidate = Math.round(rawDailyFromTotal / step) * step;
+
+      // 正向模擬 HIS 顯示行為：
+      // 1. 單次劑量（HIS 畫面多為小數點後 2 位四捨五入）
+      const simSingle = Math.round((candidate / timesPerDay) * 100) / 100;
+      // 2. 總量（HIS 畫面多為小數點後 1 位四捨五入）
+      const simTotal = Math.round((candidate * days) * 10) / 10;
+
+      // 檢查模擬結果是否完美匹配 HIS 欄位數值
+      const matchesSingle = Math.abs(simSingle - singleDose) < 0.001;
+      const matchesTotal = Math.abs(simTotal - totalDose) < 0.05;
+
+      if (matchesSingle && matchesTotal) {
+        const isCorrected = Math.abs(candidate - directDaily) > 0.001;
+        return { 
+          dailyDose: Math.round(candidate * 1000) / 1000, 
+          isCorrected: isCorrected 
+        };
+      }
+
+      // 若刻度無法完美對齊，但總量除以天數十分平整，優先採總量推算值
+      return { 
+        dailyDose: round(rawDailyFromTotal, 4), 
+        isCorrected: false 
+      };
+    }
+
+    // 處方列提取
     function extractPrescriptionRows(rawText) {
       const lines = rawText.split(/\r?\n/).map(l => l.replace(/\u00A0/g, ' ').trim());
       const hasTab = rawText.includes('\t');
-
-      if (hasTab) {
-        // Tab 分隔表格解析
-        return parseTabDelimited(lines);
-      } else {
-        // 逐行複製解析
-        return parseSequentialLines(lines);
-      }
+      return hasTab ? parseTabDelimited(lines) : parseSequentialLines(lines);
     }
 
-    // 處理逐行垂直排列格式
     function parseSequentialLines(lines) {
-      // 過濾掉全空列
       const cleanLines = lines.filter(l => l !== '');
       const results = [];
-      
-      // 常見頻次集合
       const knownFreqs = new Set(['QD', 'HS', 'QN', 'BID', 'TID', 'QID', 'PRN', 'QOD', 'QAM', 'QPM']);
       const knownUnits = new Set(['GM', 'G', '克', '公克', '錢', '兩', '粒', '包', '片', 'ML', 'CC']);
 
       let i = 0;
       while (i < cleanLines.length) {
         const line = cleanLines[i];
-
-        // 偵測是否為頻次
         const freqCandidate = line.toUpperCase();
+        
         if (knownFreqs.has(freqCandidate) && i >= 3) {
           const freq = freqCandidate;
           const unit = cleanLines[i - 1];
           const singleDoseStr = cleanLines[i - 2];
           const singleDose = parseFloat(singleDoseStr);
 
-          // 往後尋找天數 (通常在 freq 緊接的下一個數字)
-          let days = 28; // fallback
+          let days = 28;
           if (i + 1 < cleanLines.length && /^\d+$/.test(cleanLines[i + 1])) {
             days = parseInt(cleanLines[i + 1], 10);
           }
 
-          // 往前尋找藥名
+          let totalDose = NaN;
+          for (let offset = 2; offset <= 5; offset++) {
+            if (i + offset < cleanLines.length) {
+              const candidate = cleanLines[i + offset];
+              if (/^\d+(\.\d+)?$/.test(candidate)) {
+                totalDose = parseFloat(candidate);
+                break;
+              }
+            }
+          }
+
           let rawName = cleanLines[i - 3];
           let code = '';
           if (i >= 5 && isLikelyCode(cleanLines[i - 5])) {
@@ -324,7 +375,6 @@
           }
 
           if (!isNaN(singleDose) && rawName && !isHeaderWord(rawName)) {
-            // 確認 unit 是否合理
             const cleanUnit = knownUnits.has(unit.toUpperCase()) ? unit : 'GM';
             results.push({
               code: code,
@@ -332,7 +382,8 @@
               singleDose: singleDose,
               unit: cleanUnit,
               freq: freq,
-              days: days
+              days: days,
+              totalDose: totalDose
             });
           }
         }
@@ -341,7 +392,6 @@
       return results;
     }
 
-    // 處理 Tab 表格形式
     function parseTabDelimited(lines) {
       const results = [];
       const knownFreqs = new Set(['QD', 'HS', 'QN', 'BID', 'TID', 'QID', 'PRN', 'QOD', 'QAM', 'QPM']);
@@ -351,10 +401,8 @@
         const cols = line.split('\t').map(c => c.trim());
         if (cols.length < 5) continue;
 
-        // 尋找各欄位位置
-        let name = '', singleDose = NaN, unit = 'GM', freq = '', days = 28, code = '';
+        let name = '', singleDose = NaN, unit = 'GM', freq = '', days = 28, code = '', totalDose = NaN;
         
-        // 尋找頻次欄
         let freqIdx = cols.findIndex(c => knownFreqs.has(c.toUpperCase()));
         if (freqIdx !== -1) {
           freq = cols[freqIdx].toUpperCase();
@@ -371,6 +419,13 @@
           if (freqIdx >= 5) {
             code = cols[0];
           }
+
+          for (let k = cols.length - 1; k > freqIdx; k--) {
+            if (/^\d+(\.\d+)?$/.test(cols[k])) {
+              totalDose = parseFloat(cols[k]);
+              break;
+            }
+          }
         }
 
         if (name && !isNaN(singleDose) && freq && !isHeaderWord(name)) {
@@ -380,7 +435,8 @@
             singleDose: singleDose,
             unit: unit,
             freq: freq,
-            days: days
+            days: days,
+            totalDose: totalDose
           });
         }
       }
@@ -392,46 +448,32 @@
     }
 
     function isHeaderWord(str) {
-      return ['醫令學名及單位', '醫令學名', '每次', '用法', '天數', '總量', '藥品名稱'].includes(str);
+      return ['醫令代碼', '醫令學名及單位', '醫令學名', '每次', '用法', '天數', '總量', '藥品名稱'].includes(str);
     }
 
     function getTimesPerDay(freq) {
       return FREQ_MAP[freq.toUpperCase()] || 1;
     }
 
-    // 中藥品名清理與修飾
     function cleanMedicineName(raw) {
       let name = raw.trim();
-
-      // 移除前綴符號如 ☆, ★, 空白
       name = name.replace(/^[☆★\*\s]+/, '');
-
-      // 移除 (自) 標記
       name = name.replace(/\(自\)/g, '').replace(/（自）/g, '');
 
-      // 智能中藥名簡化
       if (optNormalizeName.checked) {
-        if (SMART_NAME_MAP[name]) {
-          return SMART_NAME_MAP[name];
-        }
+        if (SMART_NAME_MAP[name]) return SMART_NAME_MAP[name];
 
-        // 針對飲片常見前綴與後綴修飾：如 (炒)杜仲 -> 炒杜仲, (炙)甘草 -> 炙甘草, (赤)芍藥 -> 赤芍
         name = name.replace(/^\(([炒炙生酒製煨酒蒸])\)(.+)/, '$1$2');
         name = name.replace(/^（([炒炙生酒製煨酒蒸])）(.+)/, '$1$2');
 
-        // 針對中綴修飾：如 黃耆(生) -> 生黃耆, 香附(製) -> 製香附, 川芎(酒) -> 酒川芎
         const suffixMatch = name.match(/^(.+?)\(([生炒製酒炙煨])\)$/);
-        if (suffixMatch) {
-          name = suffixMatch[2] + suffixMatch[1];
-        }
+        if (suffixMatch) name = suffixMatch[2] + suffixMatch[1];
         
-        // 特殊對照再過濾
         if (name === '生地黃') name = '生地';
         if (name === '赤芍藥') name = '赤芍';
         if (name === '白芍藥') name = '白芍';
       }
 
-      // 若開啟清除其餘剩餘括號（如 黃柏(川) -> 黃柏, 石斛(釵) -> 石斛）
       if (optCleanBrackets.checked) {
         name = name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '').trim();
       }
@@ -439,12 +481,19 @@
       return name;
     }
 
-    // 格式化劑量
     function formatDose(num) {
-      if (optTrimZero.checked) {
-        return num.toFixed(1);
+      const val = Math.round(num * 1000) / 1000;
+      
+      if (!optSmartDecimals.checked) {
+        return parseFloat(val.toFixed(2)).toString();
       }
-      return parseFloat(num.toFixed(2)).toString();
+
+      const remainder2 = Math.round((val * 100)) % 10;
+      if (remainder2 !== 0) {
+        return val.toFixed(2);
+      }
+      
+      return val.toFixed(1);
     }
 
     function round(num, decimals = 2) {
@@ -452,7 +501,6 @@
       return Math.round(num * factor) / factor;
     }
 
-    // 渲染結果
     function renderResults(groups) {
       quickOutputContainer.innerHTML = '';
       groupsDetailContainer.innerHTML = '';
@@ -462,8 +510,7 @@
 
       let allTextLines = [];
 
-      groups.forEach((group, idx) => {
-        // 1. 生成該組單行格式：蒲公英1.5g 海螵蛸2.0g ... BID*28天
+      groups.forEach((group) => {
         const itemsText = group.items
           .map(it => `${it.displayName}${formatDose(it.dailyDose)}${group.unitSymbol}`)
           .join(' ');
@@ -471,11 +518,9 @@
         const lineOutput = `${itemsText}  ${group.freq}*${group.days}天`;
         allTextLines.push(lineOutput);
 
-        // 2. 累計數值計算
-        const groupDailyTotal = round(group.items.reduce((sum, it) => sum + it.dailyDose, 0), 2);
-        const groupSingleDoseTotal = round(groupDailyTotal / group.timesPerDay, 2);
+        const groupDailyTotal = round(group.items.reduce((sum, it) => sum + it.dailyDose, 0), 3);
+        const groupSingleDoseTotal = round(groupDailyTotal / group.timesPerDay, 3);
 
-        // 3. 渲染快速預覽項目
         const isDecoction = group.type === '飲片';
         const typeBadgeColor = isDecoction 
           ? 'bg-amber-100 text-amber-800 border-amber-300' 
@@ -505,11 +550,11 @@
         `;
         quickOutputContainer.appendChild(quickCard);
 
-        // 4. 渲染防呆核對詳細表格卡片
         const detailCard = document.createElement('div');
         detailCard.className = 'bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden';
         
         let tableRowsHtml = group.items.map((it, itemIdx) => {
+          const hasTotalAudit = !isNaN(it.totalDose);
           return `
             <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0 text-xs">
               <td class="py-2.5 px-3 font-mono text-slate-400 text-center">${itemIdx + 1}</td>
@@ -521,8 +566,14 @@
               </td>
               <td class="py-2.5 px-3 text-right font-mono text-slate-600">${it.singleDose} <span class="text-[10px] text-slate-400">${it.unit}</span></td>
               <td class="py-2.5 px-3 text-center text-slate-600 font-mono">× ${group.timesPerDay}</td>
-              <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 bg-emerald-50/40">${formatDose(it.dailyDose)} <span class="text-[10px]">${group.unitSymbol}</span></td>
-              <td class="py-2.5 px-3 text-right font-mono text-slate-500">${round(it.dailyDose * group.days, 1)} ${group.unitSymbol}</td>
+              <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 bg-emerald-50/40">
+                ${formatDose(it.dailyDose)} <span class="text-[10px]">${group.unitSymbol}</span>
+                ${it.isCorrected ? '<span class="ml-1 px-1 py-0.2 text-[9px] bg-amber-100 text-amber-800 rounded font-sans" title="經總量正向模擬校正四捨五入誤差">校正</span>' : ''}
+              </td>
+              <td class="py-2.5 px-3 text-right font-mono text-slate-500">
+                ${hasTotalAudit ? it.totalDose : round(it.dailyDose * group.days, 2)} ${group.unitSymbol}
+                ${hasTotalAudit ? '<span class="text-[9px] text-emerald-600 ml-1 font-sans">✓精準</span>' : ''}
+              </td>
             </tr>
           `;
         }).join('');
@@ -538,10 +589,10 @@
             </div>
             <div class="flex items-center gap-4 text-xs font-medium">
               <span class="text-slate-600">
-                單日總量: <strong class="text-slate-900 font-mono text-sm">${groupDailyTotal}</strong> ${group.unitSymbol}
+                單日總量: <strong class="text-slate-900 font-mono text-sm">${formatDose(groupDailyTotal)}</strong> ${group.unitSymbol}
               </span>
               <span class="text-slate-600">
-                單次/單包量: <strong class="text-slate-900 font-mono text-sm">${groupSingleDoseTotal}</strong> ${group.unitSymbol}
+                單次/單包量: <strong class="text-slate-900 font-mono text-sm">${formatDose(groupSingleDoseTotal)}</strong> ${group.unitSymbol}
               </span>
             </div>
           </div>
@@ -566,7 +617,6 @@
         groupsDetailContainer.appendChild(detailCard);
       });
 
-      // 綁定單行複製事件
       document.querySelectorAll('.btnCopyLine').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const textToCopy = e.currentTarget.getAttribute('data-line');
@@ -574,14 +624,12 @@
         });
       });
 
-      // 綁定複製全部按鈕
       btnCopyAll.onclick = () => {
         const fullText = allTextLines.join('\n');
         copyToClipboard(fullText, '已複製全部處方分組文字！');
       };
     }
 
-    // 複製工具函式
     function copyToClipboard(text, successMsg) {
       if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(() => {
