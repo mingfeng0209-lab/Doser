@@ -3,953 +3,630 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>中藥處方分組與每日劑量解析器</title>
-  <!-- Tailwind CSS -->
+  <title>中醫處方分組與每日劑量換算器</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: {
-              50: '#f0fdf9',
-              100: '#ccfbef',
-              200: '#99f6e0',
-              500: '#14b8a6',
-              600: '#0d9488',
-              700: '#0f766e',
-              800: '#115e59',
-              900: '#134e4a',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
     body {
-      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      font-family: 'Noto Sans TC', sans-serif;
     }
-    .mono-num {
-      font-feature-settings: "tnum";
-      font-variant-numeric: tabular-nums;
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
     }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-teal-100 selection:text-teal-900">
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 mb-6 border-b border-slate-200">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="p-2 bg-emerald-600 text-white rounded-lg shadow-sm">
+            <i class="fa-solid fa-mortar-pestle text-xl"></i>
+          </span>
+          <h1 class="text-2xl font-bold text-slate-900 tracking-tight">中醫處方分組與每日劑量換算器</h1>
+        </div>
+        <p class="text-sm text-slate-500 mt-1">自動解析 HIS 複製處方，支援水煎飲片（錢）與濃縮粉劑（g）獨立分組換算</p>
+      </div>
+      <div class="flex items-center gap-2 mt-4 md:mt-0">
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <i class="fa-solid fa-shield-halved mr-1"></i> 本機離線運算 · 隱私無虞
+        </span>
+      </div>
+    </header>
 
-  <!-- Toast Notification -->
-  <div id="toast" class="fixed top-5 right-5 z-50 transform transition-all duration-300 translate-y-[-100px] opacity-0 pointer-events-none">
-    <div class="flex items-center gap-2.5 bg-slate-900/95 text-white px-4 py-3 rounded-xl shadow-xl backdrop-blur-md text-sm font-medium border border-slate-700/60">
-      <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400 flex-shrink-0"></i>
-      <span id="toast-msg">已成功複製到剪貼簿！</span>
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Input Panel (5 cols) -->
+      <div class="lg:col-span-5 flex flex-col gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-3">
+            <label for="hisInput" class="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-clipboard-list text-emerald-600"></i> HIS 處方貼上區
+            </label>
+            <div class="flex gap-2">
+              <button id="btnSamplePowder" class="text-xs text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded transition">
+                範例粉劑
+              </button>
+              <button id="btnSampleHerb" class="text-xs text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded transition">
+                範例飲片
+              </button>
+              <button id="btnClear" class="text-xs text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded transition">
+                清空
+              </button>
+            </div>
+          </div>
+
+          <textarea id="hisInput" rows="14" class="w-full text-xs font-mono-code p-3.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition placeholder:text-slate-400 leading-relaxed resize-y" placeholder="請直接從 HIS 處方清單反白複製並貼在此處...
+支援：
+1. 逐行複製貼上格式（每格一行）
+2. 傳統 Tab 分隔表格"></textarea>
+
+          <!-- Configuration Controls -->
+          <div class="mt-4 pt-4 border-t border-slate-100 space-y-2.5">
+            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">轉換設定</div>
+            
+            <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-700 hover:text-slate-900">
+              <input type="checkbox" id="optNormalizeName" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300">
+              <span>中藥名智慧標準化（如：地黃(生)➔生地、(炒)杜仲(自)➔炒杜仲、去除☆與自費標記）</span>
+            </label>
+
+            <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-700 hover:text-slate-900">
+              <input type="checkbox" id="optCleanBrackets" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300">
+              <span>清除其餘剩餘括號註記（如：黃柏(川)➔黃柏）</span>
+            </label>
+
+            <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-700 hover:text-slate-900">
+              <input type="checkbox" id="optTrimZero" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300">
+              <span>劑量維持至少一位小數（如 1.0g、2.0錢）</span>
+            </label>
+          </div>
+
+          <button id="btnParse" class="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-sm transition flex items-center justify-center gap-2 text-sm">
+            <i class="fa-solid fa-bolt"></i> 解析並依頻次天數分組
+          </button>
+        </div>
+      </div>
+
+      <!-- Result Panel (7 cols) -->
+      <div class="lg:col-span-7 flex flex-col gap-4">
+        
+        <!-- Output Summary Card -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                <i class="fa-solid fa-file-lines text-emerald-600"></i> 病歷處方輸出格式
+              </h2>
+              <span id="badgeCount" class="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full font-medium hidden">0 組</span>
+            </div>
+            <button id="btnCopyAll" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+              <i class="fa-regular fa-clone"></i> 複製全部輸出文字
+            </button>
+          </div>
+
+          <div id="quickOutputContainer" class="space-y-3">
+            <div class="text-center py-12 text-slate-400 text-sm">
+              <i class="fa-solid fa-arrow-left text-2xl mb-2 text-slate-300 block"></i>
+              請在左側貼入 HIS 處方文字並點擊「解析」
+            </div>
+          </div>
+        </div>
+
+        <!-- Detailed Audit Groups -->
+        <div id="groupsDetailContainer" class="space-y-4">
+          <!-- Dynamic group cards rendered here -->
+        </div>
+
+      </div>
     </div>
   </div>
 
-  <!-- Header -->
-  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 flex items-center justify-center text-white shadow-md shadow-teal-500/20">
-          <i data-lucide="flask-conical" class="w-5 h-5"></i>
-        </div>
-        <div>
-          <h1 class="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            中藥處方分組與每日劑量解析器
-            <span class="text-[11px] font-semibold px-2 py-0.5 bg-teal-50 text-teal-700 rounded-full border border-teal-200">臨床專用</span>
-          </h1>
-          <p class="text-xs text-slate-500">支援 HIS 多欄貼入 / 逐行複製，自動依用法天數分組計算每日總克數</p>
-        </div>
-      </div>
-      <div class="hidden sm:flex items-center gap-2 text-xs text-slate-500">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
-          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-          100% 瀏覽器本地運算・保障病歷隱私
-        </span>
-      </div>
-    </div>
-  </header>
-
-  <!-- Main Container -->
-  <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-6">
-
-    <!-- Top Card: Input Area -->
-    <section class="bg-white rounded-2xl shadow-sm border border-slate-200/90 p-5 transition-all">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3.5 gap-3 border-b border-slate-100">
-        <div>
-          <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <i data-lucide="file-text" class="w-4 h-4 text-teal-600"></i>
-            HIS 處方資料貼入
-          </h2>
-          <p class="text-xs text-slate-500 mt-0.5">直接反白複製 HIS 處方表格貼入（支援 Tab 分隔橫列或單列逐行貼入格式）</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <button id="btn-load-sample" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100/80 rounded-lg transition-colors border border-teal-200">
-            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-            載入您的處方範例
-          </button>
-          <button id="btn-clear" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200">
-            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-            清空
-          </button>
-        </div>
-      </div>
-
-      <div class="mt-4">
-        <textarea id="raw-input" rows="7" placeholder="請在此貼上 HIS 處方內容...
-例如：
-醫令代碼
-註
-醫令學名及單位
-每次
-單位
-用法
-天數
-途徑
-時間
-總量
-CPDGP
- 
-地骨皮
-1.5
-GM
-HS
-28
-PO
-PC
-42.0
-..." class="w-full text-xs sm:text-sm font-mono p-3.5 bg-slate-50/70 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500 transition-all text-slate-800 placeholder-slate-400 leading-relaxed"></textarea>
-      </div>
-
-      <!-- Settings & Options -->
-      <div class="mt-4 pt-3.5 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div class="flex flex-wrap items-center gap-y-2 gap-x-5 text-xs text-slate-600">
-          <label class="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" id="opt-smart-name" checked class="rounded border-slate-300 text-teal-600 focus:ring-teal-500/30">
-            <span class="font-medium text-slate-700">智慧中醫品名正規化 (例: 地黃(生)➔生地, 芍藥(赤)➔赤芍, 黃柏(川)➔黃柏)</span>
-          </label>
-          <label class="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" id="opt-fixed-decimal" checked class="rounded border-slate-300 text-teal-600 focus:ring-teal-500/30">
-            <span>固定小數 1 位 (例: 1.0g、2.0g)</span>
-          </label>
-        </div>
-        <button id="btn-parse" class="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm rounded-xl shadow-sm shadow-teal-600/30 transition-all active:scale-[0.98]">
-          <i data-lucide="play" class="w-4 h-4 fill-current"></i>
-          解析並分組計算
-        </button>
-      </div>
-    </section>
-
-    <!-- Error / Parsing Notice -->
-    <div id="notice-box" class="hidden rounded-xl p-4 bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-3">
-      <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
-      <div id="notice-content" class="flex-1 space-y-1"></div>
-    </div>
-
-    <!-- Output Section: Clinical Formatted Text -->
-    <section id="result-section" class="space-y-6 hidden">
-
-      <!-- Main Result Card (Desired format matching prompt) -->
-      <div class="bg-gradient-to-br from-white to-teal-50/20 rounded-2xl shadow-sm border border-teal-200/90 p-5 sm:p-6">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-teal-100 gap-3">
-          <div class="flex items-center gap-2.5">
-            <span class="flex h-3 w-3 relative">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-3 w-3 bg-teal-500"></span>
-            </span>
-            <div>
-              <h2 class="text-base font-bold text-slate-900">臨床病歷格式輸出 (每日劑量分組)</h2>
-              <p class="text-xs text-slate-500">已依【用法頻次*天數】完成聚合，每味藥物數值為每日總克數</p>
-            </div>
-          </div>
-          <button id="btn-copy-all" class="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-sm transition-all transform active:scale-95">
-            <i data-lucide="copy" class="w-4 h-4"></i>
-            一鍵複製全部文字
-          </button>
-        </div>
-
-        <!-- Rendered lines list -->
-        <div id="clinical-output-container" class="mt-5 space-y-3 font-mono text-sm sm:text-base leading-relaxed">
-          <!-- Formatted lines generated here -->
-        </div>
-
-        <div class="mt-5 pt-3.5 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-          <span class="flex items-center gap-1.5">
-            <i data-lucide="info" class="w-3.5 h-3.5 text-teal-600"></i>
-            格式：<code>藥品每日克數 ... 頻次*天數天</code>（點擊右側按鈕可複製單行）
-          </span>
-          <span id="stat-total-herbs" class="font-semibold text-slate-700">共解析 0 品項</span>
-        </div>
-      </div>
-
-      <!-- Detailed Verification Cards per Group -->
-      <div class="space-y-3">
-        <div class="flex items-center justify-between px-1">
-          <h3 class="text-sm font-bold text-slate-700 tracking-wider flex items-center gap-2">
-            <i data-lucide="clipboard-check" class="w-4 h-4 text-slate-500"></i>
-            處方分組與防呆核對清單 (Audit Verification)
-          </h3>
-          <span class="text-xs text-slate-400">核對「每次劑量」與換算「每日劑量」及「全期總量」</span>
-        </div>
-
-        <div id="groups-container" class="space-y-4">
-          <!-- Dynamic group cards with tables -->
-        </div>
-      </div>
-
-    </section>
-
-    <!-- Empty State -->
-    <div id="empty-state" class="py-12 text-center text-slate-400 space-y-3">
-      <div class="w-14 h-14 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
-        <i data-lucide="clipboard-list" class="w-7 h-7"></i>
-      </div>
-      <div>
-        <p class="text-sm font-medium text-slate-600">尚未載入資料</p>
-        <p class="text-xs text-slate-400 mt-1">請於上方貼入 HIS 處方或點擊右上角「載入您的處方範例」</p>
-      </div>
-    </div>
-
-  </main>
-
-  <!-- Footer -->
-  <footer class="mt-auto border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-400">
-    中藥臨床處方解析輔助工具 &bull; 純前端本地架構 &bull; 請於處方開立時依臨床醫師最後專業審核為主
-  </footer>
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 z-50">
+    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toastMsg">已複製到剪貼簿</span>
+  </div>
 
   <script>
-    // --- Frequency Definition & Multipliers ---
+    // 預設頻次對應每日服用次數表
     const FREQ_MAP = {
-      'HS': { times: 1, name: '睡前 (每日1次)' },
-      'QD': { times: 1, name: '每日1次' },
-      'QN': { times: 1, name: '每晚 (每日1次)' },
-      'QAM': { times: 1, name: '每日早晨1次' },
-      'QPM': { times: 1, name: '每日傍晚1次' },
-      'BID': { times: 2, name: '每日2次 (早晚)' },
-      'TID': { times: 3, name: '每日3次 (三餐)' },
-      'QID': { times: 4, name: '每日4次' },
-      'QOD': { times: 0.5, name: '隔日1次' },
-      'PRN': { times: 1, name: '需要時 (以每日1次計)' },
-      'STAT': { times: 1, name: '立即1次' }
+      'QD': 1, 'HS': 1, 'QN': 1, 'QAM': 1, 'QPM': 1, 'PRN': 1,
+      'BID': 2,
+      'TID': 3,
+      'QID': 4,
+      'QOD': 0.5,
+      'QW': 0.14
     };
 
-    // Smart Chinese Medicine Name Normalization Map
-    const HERB_NAME_MAP = {
+    // 智能簡稱對照表
+    const SMART_NAME_MAP = {
       '地黃(生)': '生地',
       '芍藥(赤)': '赤芍',
+      '芍藥(白)': '白芍',
       '黃柏(川)': '黃柏',
       '天花粉(栝樓根)': '天花粉',
-      '知母(鹽)': '知母',
-      '杜仲(炭)': '杜仲',
-      '白朮(炒)': '白朮',
-      '當歸(酒)': '當歸',
-      '柴胡(醋)': '柴胡',
-      '元胡(醋)': '元胡',
-      '延胡索(醋)': '延胡索',
-      '黃芩(酒)': '黃芩',
-      '大黃(酒)': '大黃'
+      '生薑(煨)': '煨生薑',
+      '酸棗仁(炒)': '炒棗仁',
+      '薏苡仁(炒)': '炒薏仁'
     };
 
-    // User's Exact HIS Copied Multi-line Raw String
-    const SAMPLE_RAW_DATA = `醫令代碼
-註
-醫令學名及單位
-每次
-單位
-用法
-天數
-途徑
-時間
-總量
-CPDGP
-\u00A0
-地骨皮
-1.5
-GM
-HS
-28
-PO
-PC
-42.0
-CPHB
-\u00A0
-黃柏(川)
-1.5
-GM
-HS
-28
-PO
-PC
-42.0
-CPMMD
-\u00A0
-麥門冬
-1.0
-GM
-HS
-28
-PO
-PC
-28.0
-CPPGI
-\u00A0
-蒲公英
-0.75
-GM
-BID
-28
-PO
-PC
-42.0
-CPHPSH
-\u00A0
-海螵蛸
-1.0
-GM
-BID
-28
-PO
-PC
-56.0
-CPIUJ
-\u00A0
-玉竹
-1.0
-GM
-BID
-28
-PO
-PC
-56.0
-CPFSH2
-\u00A0
-茯神
-1.0
-GM
-HS
-28
-PO
-PC
-28.0
-CPDH1
-\u00A0
-地黃(生)
-1.0
-GM
-HS
-28
-PO
-PC
-28.0
-CPLG2
-\u00A0
-蘆根
-0.75
-GM
-BID
-28
-PO
-PC
-42.0
-CPHSH1
-\u00A0
-藿香
-0.5
-克
-BID
-28
-PO
-PC
-28.0
-CPSHICH
-\u00A0
-芍藥(赤)
-1.0
-GM
-HS
-28
-PO
-PC
-28.0
-CPTM1
-\u00A0
-天麻
-0.5
-克
-BID
-28
-PO
-PC
-28.0
-CPMHG
-\u00A0
-麻黃根
-1.5
-GM
-HS
-28
-PO
-PC
-42.0
-CPMDP
-\u00A0
-牡丹皮
-0.5
-GM
-BID
-28
-PO
-PC
-28.0
-CPTHF
-\u00A0
-天花粉(栝樓根)
-1.0
-GM
-HS
-28
-PO
-PC
-28.0
-CPSHFDJT
-\u00A0
-旋覆代赭石湯
-1.75
-GM
-BID
-28
-PO
-PC
-98.0
-CPJUSHIS
-\u00A0
-加味逍遙散
-1.0
-GM
-BID
-28
-PO
-PC
-56.0`;
+    // 範例資料：濃縮粉劑
+    const SAMPLE_POWDER = `醫令代碼\n註\n醫令學名及單位\n每次\n單位\n用法\n天數\n途徑\n時間\n總量\nCPDGP\n \n地骨皮\n1.5\nGM\nHS\n28\nPO\nPC\n42.0\nCPHB\n \n黃柏(川)\n1.5\nGM\nHS\n28\nPO\nPC\n42.0\nCPMMD\n \n麥門冬\n1.0\nGM\nHS\n28\nPO\nPC\n28.0\nCPPGI\n \n蒲公英\n0.75\nGM\nBID\n28\nPO\nPC\n42.0\nCPHPSH\n \n海螵蛸\n1.0\nGM\nBID\n28\nPO\nPC\n56.0\nCPIUJ\n \n玉竹\n1.0\nGM\nBID\n28\nPO\nPC\n56.0\nCPFSH2\n \n茯神\n1.0\nGM\nHS\n28\nPO\nPC\n28.0\nCPDH1\n \n地黃(生)\n1.0\nGM\nHS\n28\nPO\nPC\n28.0\nCPLG2\n \n蘆根\n0.75\nGM\nBID\n28\nPO\nPC\n42.0\nCPHSH1\n \n藿香\n0.5\n克\nBID\n28\nPO\nPC\n28.0\nCPSHICH\n \n芍藥(赤)\n1.0\nGM\nHS\n28\nPO\nPC\n28.0\nCPTM1\n \n天麻\n0.5\n克\nBID\n28\nPO\nPC\n28.0\nCPMHG\n \n麻黃根\n1.5\nGM\nHS\n28\nPO\nPC\n42.0\nCPMDP\n \n牡丹皮\n0.5\nGM\nBID\n28\nPO\nPC\n28.0\nCPTHF\n \n天花粉(栝樓根)\n1.0\nGM\nHS\n28\nPO\nPC\n28.0\nCPSHFDJT\n \n旋覆代赭石湯\n1.75\nGM\nBID\n28\nPO\nPC\n98.0\nCPJUSHIS\n \n加味逍遙散\n1.0\nGM\nBID\n28\nPO\nPC\n56.0`;
 
-    // DOM Elements
-    const rawInput = document.getElementById('raw-input');
-    const btnLoadSample = document.getElementById('btn-load-sample');
-    const btnClear = document.getElementById('btn-clear');
-    const btnParse = document.getElementById('btn-parse');
-    const btnCopyAll = document.getElementById('btn-copy-all');
-    const optSmartName = document.getElementById('opt-smart-name');
-    const optFixedDecimal = document.getElementById('opt-fixed-decimal');
-    const resultSection = document.getElementById('result-section');
-    const emptyState = document.getElementById('empty-state');
-    const clinicalOutputContainer = document.getElementById('clinical-output-container');
-    const groupsContainer = document.getElementById('groups-container');
-    const noticeBox = document.getElementById('notice-box');
-    const noticeContent = document.getElementById('notice-content');
-    const statTotalHerbs = document.getElementById('stat-total-herbs');
-    const toast = document.getElementById('toast');
-    const toastMsg = document.getElementById('toast-msg');
+    // 範例資料：生藥材飲片
+    const SAMPLE_HERB = `CHDG\n \n當歸(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHNJTZ\n \n女貞子(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHHLTS\n \n旱蓮草(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHCHCHIU\n \n川芎(酒)(自)\n1.0\n錢\nBID\n14\nPO\nPC\n28.0\nCHSHI\n \n山藥(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHFSH2\n \n☆茯神(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHCHP3\n \n陳皮(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHSHF\n \n香附(製)(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHHCH\n \n黃耆(生)(自)\n1.75\n錢\nBID\n14\nPO\nPC\n49.0\nCHSHH\n \n石斛(釵)(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHDS2\n \n黨參(自)\n1.5\n錢\nBID\n14\nPO\nPC\n42.0\nCHDJ2\n \n(炒)杜仲(自)\n1.75\n錢\nBID\n14\nPO\nPC\n49.0\nCHGTSJ\n \n(炙)甘草(自)\n0.75\n錢\nBID\n14\nPO\nPC\n21.0\nCHSHICH\n \n(赤)芍藥(自)\n1.0\n錢\nBID\n14\nPO\nPC\n28.0`;
 
-    let parsedGroups = [];
-    let formattedTextLines = [];
+    // 元素參照
+    const hisInput = document.getElementById('hisInput');
+    const btnParse = document.getElementById('btnParse');
+    const btnClear = document.getElementById('btnClear');
+    const btnSamplePowder = document.getElementById('btnSamplePowder');
+    const btnSampleHerb = document.getElementById('btnSampleHerb');
+    const btnCopyAll = document.getElementById('btnCopyAll');
+    const quickOutputContainer = document.getElementById('quickOutputContainer');
+    const groupsDetailContainer = document.getElementById('groupsDetailContainer');
+    const badgeCount = document.getElementById('badgeCount');
+    const optNormalizeName = document.getElementById('optNormalizeName');
+    const optCleanBrackets = document.getElementById('optCleanBrackets');
+    const optTrimZero = document.getElementById('optTrimZero');
 
-    // --- Toast & Clipboard ---
-    function showToast(message) {
-      toastMsg.textContent = message;
-      toast.classList.remove('translate-y-[-100px]', 'opacity-0');
-      toast.classList.add('translate-y-0', 'opacity-100');
-      setTimeout(() => {
-        toast.classList.remove('translate-y-0', 'opacity-100');
-        toast.classList.add('translate-y-[-100px]', 'opacity-0');
-      }, 2400);
-    }
+    // 儲存目前解析群組資料
+    let currentParsedGroups = [];
 
-    function safeClipboardCopy(text) {
-      try {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-        showToast('已複製到剪貼簿！');
-      } catch (err) {
-        showToast('複製失敗，請手動反白複製');
-      }
-    }
+    // 載入預設
+    btnSamplePowder.addEventListener('click', () => {
+      hisInput.value = SAMPLE_POWDER;
+      parseAndRender();
+    });
 
-    // --- Dose Formatting ---
-    function formatDose(val, fixed = true) {
-      if (isNaN(val)) return '0';
-      if (fixed) {
-        return val.toFixed(1);
-      }
-      return parseFloat(val.toFixed(2)).toString();
-    }
+    btnSampleHerb.addEventListener('click', () => {
+      hisInput.value = SAMPLE_HERB;
+      parseAndRender();
+    });
 
-    // Normalize Herb Name (Smart mapping + general parenthesis stripper)
-    function normalizeHerbName(name, enableSmart) {
-      if (!name) return '';
-      let clean = name.trim().replace(/(GM|克|g|公克)$/i, '').trim();
+    btnClear.addEventListener('click', () => {
+      hisInput.value = '';
+      quickOutputContainer.innerHTML = `
+        <div class="text-center py-12 text-slate-400 text-sm">
+          <i class="fa-solid fa-arrow-left text-2xl mb-2 text-slate-300 block"></i>
+          請在左側貼入 HIS 處方文字並點擊「解析」
+        </div>
+      `;
+      groupsDetailContainer.innerHTML = '';
+      badgeCount.classList.add('hidden');
+      btnCopyAll.disabled = true;
+      currentParsedGroups = [];
+    });
 
-      if (!enableSmart) {
-        return clean;
+    btnParse.addEventListener('click', parseAndRender);
+    [optNormalizeName, optCleanBrackets, optTrimZero].forEach(el => {
+      el.addEventListener('change', () => {
+        if (hisInput.value.trim()) parseAndRender();
+      });
+    });
+
+    // 核心解析邏輯
+    function parseAndRender() {
+      const text = hisInput.value.trim();
+      if (!text) {
+        showToast('請先貼入處方文字');
+        return;
       }
 
-      // 1. Direct match in dictionary
-      if (HERB_NAME_MAP[clean]) {
-        return HERB_NAME_MAP[clean];
+      const rows = extractPrescriptionRows(text);
+      if (rows.length === 0) {
+        quickOutputContainer.innerHTML = `
+          <div class="text-center py-8 text-rose-500 text-sm">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 block"></i>
+            未能解析出有效藥物，請確認複製格式是否包含藥名、劑量、頻次與天數。
+          </div>
+        `;
+        groupsDetailContainer.innerHTML = '';
+        btnCopyAll.disabled = true;
+        badgeCount.classList.add('hidden');
+        return;
       }
 
-      // 2. Pattern check for X(Y) where X or Y matches
-      // e.g. "地黃(生)" -> "生地", "芍藥(赤)" -> "赤芍"
-      const matchInvert = clean.match(/^([^\(\（]+)[\(\（]([^\)\）]+)[\)\）]$/);
-      if (matchInvert) {
-        const main = matchInvert[1].trim();
-        const sub = matchInvert[2].trim();
-        if (sub.length === 1 && (main === '地黃' || main === '芍藥')) {
-          return `${sub}${main[0]}`; // 生 + 地 -> 生地; 赤 + 芍 -> 赤芍
-        }
-        // Fallback: strip parenthesis (e.g. "黃柏(川)" -> "黃柏", "天花粉(栝樓根)" -> "天花粉")
-        return main;
-      }
-
-      // 3. Fallback strip parentheses
-      return clean.replace(/\s*[\(\（][^\)\）]+[\)\）]\s*/g, '').trim();
-    }
-
-    // --- Parser Engine (Supports both Line-by-line & Tab-separated) ---
-    function parseHISPrescription(rawText) {
-      if (!rawText || !rawText.trim()) {
-        return { items: [], warnings: [] };
-      }
-
-      const warnings = [];
-      const items = [];
-
-      // Normalize non-breaking spaces (\u00A0) and normalize lines
-      const normalized = rawText.replace(/\u00A0/g, ' ');
-      const lines = normalized.split(/\r?\n/).map(l => l.trim());
-
-      // Check if it's Tab-Separated
-      const tabSeparatedLines = lines.filter(l => l.includes('\t'));
-      const isTabDelimited = tabSeparatedLines.length >= 2;
-
-      if (isTabDelimited) {
-        // Mode A: TSV Line Parser
-        let colIdx = { name: 2, dose: 3, freq: 5, days: 6, total: 9 };
-        let startIndex = 0;
-
-        if (/學名|藥名|每次|用法/i.test(lines[0])) {
-          const headers = lines[0].split('\t').map(h => h.trim());
-          headers.forEach((h, i) => {
-            if (/學名|藥名|品名/i.test(h)) colIdx.name = i;
-            else if (/每次|單次/i.test(h)) colIdx.dose = i;
-            else if (/用法|頻次/i.test(h)) colIdx.freq = i;
-            else if (/天數/i.test(h)) colIdx.days = i;
-            else if (/總量/i.test(h)) colIdx.total = i;
-          });
-          startIndex = 1;
-        }
-
-        for (let i = startIndex; i < lines.length; i++) {
-          const cols = lines[i].split('\t').map(c => c.trim());
-          if (cols.length < 4) continue;
-
-          const rawName = cols[colIdx.name] || '';
-          const dose = parseFloat(cols[colIdx.dose]);
-          const freq = (cols[colIdx.freq] || 'BID').toUpperCase();
-          const days = parseInt(cols[colIdx.days], 10) || 28;
-          const total = parseFloat(cols[colIdx.total]) || null;
-
-          if (rawName && !isNaN(dose)) {
-            items.push({ rawName, dose, freq, days, total });
-          }
-        }
-      } else {
-        // Mode B: Cell-by-cell single column sequence (from HIS web copy)
-        // Header tokens pattern:
-        // [0] 醫令代碼, [1] 註, [2] 醫令學名及單位, [3] 每次, [4] 單位, [5] 用法, [6] 天數, [7] 途徑, [8] 時間, [9] 總量
-        
-        // Find if header exists and where data starts
-        const headerKeywords = ['醫令代碼', '醫令學名及單位', '每次', '用法', '天數', '總量'];
-        let dataTokens = [];
-
-        // Filter out header lines if detected at top
-        let inHeader = false;
-        let tokenIndex = 0;
-
-        while (tokenIndex < lines.length) {
-          const token = lines[tokenIndex];
-          if (headerKeywords.includes(token)) {
-            inHeader = true;
-            tokenIndex++;
-          } else if (inHeader && (token === '註' || token === '單位' || token === '途徑' || token === '時間')) {
-            tokenIndex++;
-          } else {
-            inHeader = false;
-            dataTokens.push(token);
-            tokenIndex++;
-          }
-        }
-
-        // Now walk through dataTokens. A drug block usually has 10 entries:
-        // 0: Code (e.g. CPDGP, CPPGI, CP1234)
-        // 1: Note (often empty / space)
-        // 2: Name (Chinese herb)
-        // 3: Dose (float)
-        // 4: Unit (GM, 克)
-        // 5: Freq (HS, BID, TID, QD, etc.)
-        // 6: Days (int, 28)
-        // 7: Route (PO)
-        // 8: Timing (PC, AC)
-        // 9: Total (float, 42.0)
-        
-        let i = 0;
-        while (i < dataTokens.length) {
-          // Find the next drug code token
-          const token = dataTokens[i];
-
-          // Check if token looks like drug code (e.g., CPDGP, CPHB, CP... or alphanumeric)
-          // Or scan ahead to find Frequency (HS, BID, TID, QD) to anchor
-          let matched = false;
-
-          // Standard 10-token window check
-          if (i + 5 < dataTokens.length) {
-            // Anchor search: locate Frequency token (HS, BID, TID, etc.) within next 3~8 tokens
-            let freqOffset = -1;
-            for (let offset = 2; offset <= 8 && (i + offset) < dataTokens.length; offset++) {
-              const testFreq = dataTokens[i + offset].toUpperCase();
-              if (FREQ_MAP[testFreq]) {
-                freqOffset = offset;
-                break;
-              }
-            }
-
-            if (freqOffset !== -1) {
-              const freqIdx = i + freqOffset;
-              const freq = dataTokens[freqIdx].toUpperCase();
-              
-              // Days is usually freqIdx + 1
-              let days = 28;
-              if (freqIdx + 1 < dataTokens.length && /^\d+$/.test(dataTokens[freqIdx + 1])) {
-                days = parseInt(dataTokens[freqIdx + 1], 10);
-              }
-
-              // Dose is usually float right before unit (or 1~2 slots before freq)
-              let dose = null;
-              let doseIdx = -1;
-              for (let d = freqIdx - 1; d >= i; d--) {
-                const num = parseFloat(dataTokens[d]);
-                if (!isNaN(num) && num > 0 && num < 100 && /^\d+(\.\d+)?$/.test(dataTokens[d])) {
-                  dose = num;
-                  doseIdx = d;
-                  break;
-                }
-              }
-
-              // Name is between i and doseIdx (usually has Chinese characters)
-              let rawName = '';
-              for (let n = i; n < doseIdx; n++) {
-                const t = dataTokens[n];
-                if (/[\u4e00-\u9fa5]/.test(t)) {
-                  rawName = t;
-                  break;
-                }
-              }
-
-              // If name not found by Chinese char, take slot before dose
-              if (!rawName && doseIdx > i) {
-                rawName = dataTokens[doseIdx - 1];
-              }
-
-              // Total dose is usually after Timing (PC/AC) -> freqIdx + 4
-              let total = null;
-              for (let tot = freqIdx + 2; tot <= freqIdx + 5 && tot < dataTokens.length; tot++) {
-                const num = parseFloat(dataTokens[tot]);
-                if (!isNaN(num) && /^\d+(\.\d+)?$/.test(dataTokens[tot])) {
-                  total = num;
-                }
-              }
-
-              if (rawName && dose !== null) {
-                items.push({
-                  rawName,
-                  dose,
-                  freq,
-                  days,
-                  total
-                });
-                matched = true;
-                // Move cursor past this record (usually 10 tokens per record)
-                // If standard 10 tokens: i = freqIdx + 4 + 1
-                i = Math.max(freqIdx + 4, i + 7);
-              }
-            }
-          }
-
-          if (!matched) {
-            i++;
-          }
-        }
-      }
-
-      if (items.length === 0) {
-        warnings.push('未能成功提取藥品品項，請確認貼入內容包含：藥名、每次劑量、用法頻次 (如 HS/BID/TID) 與天數。');
-      }
-
-      return { items, warnings };
-    }
-
-    // --- Grouping & Dosage Calculations ---
-    function processAndGroupItems(items, enableSmartName, fixedDecimal) {
+      // 依 【類別 (粉劑/飲片) + 頻次 + 天數】 進行分組
       const groupsMap = new Map();
 
-      items.forEach(item => {
-        const displayName = normalizeHerbName(item.rawName, enableSmartName);
-        const freqKey = item.freq.toUpperCase();
-        const days = item.days || 28;
-        const groupKey = `${freqKey}_${days}`;
-
-        const freqInfo = FREQ_MAP[freqKey] || { times: 1, name: `${freqKey} (每日1次)` };
-        const timesPerDay = freqInfo.times;
-
-        // Daily Dose = Single Dose * Daily Frequency
-        const dailyDose = item.dose * timesPerDay;
-        const calculatedTotal = dailyDose * days;
+      rows.forEach(item => {
+        const isDecoction = item.unit === '錢' || item.unit === '兩';
+        const typeLabel = isDecoction ? '飲片' : '粉劑';
+        const unitSymbol = isDecoction ? '錢' : 'g';
+        const groupKey = `${typeLabel}__${item.freq}__${item.days}`;
 
         if (!groupsMap.has(groupKey)) {
           groupsMap.set(groupKey, {
-            groupKey,
-            freq: freqKey,
-            freqName: freqInfo.name,
-            timesPerDay: timesPerDay,
-            days: days,
-            herbs: [],
-            totalDailySum: 0,
-            totalPrescriptionSum: 0
+            key: groupKey,
+            type: typeLabel,
+            unitSymbol: unitSymbol,
+            freq: item.freq,
+            days: item.days,
+            timesPerDay: getTimesPerDay(item.freq),
+            items: []
           });
         }
 
         const group = groupsMap.get(groupKey);
-        group.herbs.push({
-          rawName: item.rawName,
-          displayName: displayName,
-          singleDose: item.dose,
-          dailyDose: dailyDose,
-          formattedDaily: formatDose(dailyDose, fixedDecimal),
-          originalTotal: item.total,
-          calculatedTotal: calculatedTotal
+        const dailyDose = round(item.singleDose * group.timesPerDay, 3);
+        const cleanedName = cleanMedicineName(item.rawName);
+
+        group.items.push({
+          ...item,
+          displayName: cleanedName,
+          dailyDose: dailyDose
         });
-
-        group.totalDailySum += dailyDose;
-        group.totalPrescriptionSum += calculatedTotal;
       });
 
-      // Sort groups logically: commonly BID/TID in daytime first, HS (bedtime) last
-      const groupList = Array.from(groupsMap.values()).sort((a, b) => {
-        if (a.freq === 'HS') return 1;
-        if (b.freq === 'HS') return -1;
-        return b.timesPerDay - a.timesPerDay;
+      // 排序分組：飲片在前或粉劑在前可視慣例，此處依天數及頻次次數排序
+      currentParsedGroups = Array.from(groupsMap.values()).sort((a, b) => {
+        if (a.type !== b.type) return a.type === '粉劑' ? -1 : 1; // 粉劑優先
+        if (b.timesPerDay !== a.timesPerDay) return b.timesPerDay - a.timesPerDay;
+        return b.days - a.days;
       });
 
-      return groupList;
+      renderResults(currentParsedGroups);
     }
 
-    // --- Render to UI ---
-    function renderApp(groups, fixedDecimal) {
-      if (!groups || groups.length === 0) {
-        resultSection.classList.add('hidden');
-        emptyState.classList.remove('hidden');
-        return;
+    // 將輸入字串轉化為標準結構列
+    function extractPrescriptionRows(rawText) {
+      const lines = rawText.split(/\r?\n/).map(l => l.replace(/\u00A0/g, ' ').trim());
+      const hasTab = rawText.includes('\t');
+
+      if (hasTab) {
+        // Tab 分隔表格解析
+        return parseTabDelimited(lines);
+      } else {
+        // 逐行複製解析
+        return parseSequentialLines(lines);
+      }
+    }
+
+    // 處理逐行垂直排列格式
+    function parseSequentialLines(lines) {
+      // 過濾掉全空列
+      const cleanLines = lines.filter(l => l !== '');
+      const results = [];
+      
+      // 常見頻次集合
+      const knownFreqs = new Set(['QD', 'HS', 'QN', 'BID', 'TID', 'QID', 'PRN', 'QOD', 'QAM', 'QPM']);
+      const knownUnits = new Set(['GM', 'G', '克', '公克', '錢', '兩', '粒', '包', '片', 'ML', 'CC']);
+
+      let i = 0;
+      while (i < cleanLines.length) {
+        const line = cleanLines[i];
+
+        // 偵測是否為頻次
+        const freqCandidate = line.toUpperCase();
+        if (knownFreqs.has(freqCandidate) && i >= 3) {
+          const freq = freqCandidate;
+          const unit = cleanLines[i - 1];
+          const singleDoseStr = cleanLines[i - 2];
+          const singleDose = parseFloat(singleDoseStr);
+
+          // 往後尋找天數 (通常在 freq 緊接的下一個數字)
+          let days = 28; // fallback
+          if (i + 1 < cleanLines.length && /^\d+$/.test(cleanLines[i + 1])) {
+            days = parseInt(cleanLines[i + 1], 10);
+          }
+
+          // 往前尋找藥名
+          let rawName = cleanLines[i - 3];
+          let code = '';
+          if (i >= 5 && isLikelyCode(cleanLines[i - 5])) {
+            code = cleanLines[i - 5];
+          } else if (i >= 4 && isLikelyCode(cleanLines[i - 4])) {
+            code = cleanLines[i - 4];
+          }
+
+          if (!isNaN(singleDose) && rawName && !isHeaderWord(rawName)) {
+            // 確認 unit 是否合理
+            const cleanUnit = knownUnits.has(unit.toUpperCase()) ? unit : 'GM';
+            results.push({
+              code: code,
+              rawName: rawName,
+              singleDose: singleDose,
+              unit: cleanUnit,
+              freq: freq,
+              days: days
+            });
+          }
+        }
+        i++;
+      }
+      return results;
+    }
+
+    // 處理 Tab 表格形式
+    function parseTabDelimited(lines) {
+      const results = [];
+      const knownFreqs = new Set(['QD', 'HS', 'QN', 'BID', 'TID', 'QID', 'PRN', 'QOD', 'QAM', 'QPM']);
+
+      for (let line of lines) {
+        if (!line) continue;
+        const cols = line.split('\t').map(c => c.trim());
+        if (cols.length < 5) continue;
+
+        // 尋找各欄位位置
+        let name = '', singleDose = NaN, unit = 'GM', freq = '', days = 28, code = '';
+        
+        // 尋找頻次欄
+        let freqIdx = cols.findIndex(c => knownFreqs.has(c.toUpperCase()));
+        if (freqIdx !== -1) {
+          freq = cols[freqIdx].toUpperCase();
+          if (freqIdx >= 2) {
+            singleDose = parseFloat(cols[freqIdx - 2]);
+            unit = cols[freqIdx - 1];
+          }
+          if (freqIdx + 1 < cols.length && /^\d+$/.test(cols[freqIdx + 1])) {
+            days = parseInt(cols[freqIdx + 1], 10);
+          }
+          if (freqIdx >= 3) {
+            name = cols[freqIdx - 3];
+          }
+          if (freqIdx >= 5) {
+            code = cols[0];
+          }
+        }
+
+        if (name && !isNaN(singleDose) && freq && !isHeaderWord(name)) {
+          results.push({
+            code: code,
+            rawName: name,
+            singleDose: singleDose,
+            unit: unit,
+            freq: freq,
+            days: days
+          });
+        }
+      }
+      return results;
+    }
+
+    function isLikelyCode(str) {
+      return /^[A-Z0-9_\-]{3,12}$/i.test(str);
+    }
+
+    function isHeaderWord(str) {
+      return ['醫令學名及單位', '醫令學名', '每次', '用法', '天數', '總量', '藥品名稱'].includes(str);
+    }
+
+    function getTimesPerDay(freq) {
+      return FREQ_MAP[freq.toUpperCase()] || 1;
+    }
+
+    // 中藥品名清理與修飾
+    function cleanMedicineName(raw) {
+      let name = raw.trim();
+
+      // 移除前綴符號如 ☆, ★, 空白
+      name = name.replace(/^[☆★\*\s]+/, '');
+
+      // 移除 (自) 標記
+      name = name.replace(/\(自\)/g, '').replace(/（自）/g, '');
+
+      // 智能中藥名簡化
+      if (optNormalizeName.checked) {
+        if (SMART_NAME_MAP[name]) {
+          return SMART_NAME_MAP[name];
+        }
+
+        // 針對飲片常見前綴與後綴修飾：如 (炒)杜仲 -> 炒杜仲, (炙)甘草 -> 炙甘草, (赤)芍藥 -> 赤芍
+        name = name.replace(/^\(([炒炙生酒製煨酒蒸])\)(.+)/, '$1$2');
+        name = name.replace(/^（([炒炙生酒製煨酒蒸])）(.+)/, '$1$2');
+
+        // 針對中綴修飾：如 黃耆(生) -> 生黃耆, 香附(製) -> 製香附, 川芎(酒) -> 酒川芎
+        const suffixMatch = name.match(/^(.+?)\(([生炒製酒炙煨])\)$/);
+        if (suffixMatch) {
+          name = suffixMatch[2] + suffixMatch[1];
+        }
+        
+        // 特殊對照再過濾
+        if (name === '生地黃') name = '生地';
+        if (name === '赤芍藥') name = '赤芍';
+        if (name === '白芍藥') name = '白芍';
       }
 
-      emptyState.classList.add('hidden');
-      resultSection.classList.remove('hidden');
+      // 若開啟清除其餘剩餘括號（如 黃柏(川) -> 黃柏, 石斛(釵) -> 石斛）
+      if (optCleanBrackets.checked) {
+        name = name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '').trim();
+      }
 
-      clinicalOutputContainer.innerHTML = '';
-      groupsContainer.innerHTML = '';
-      formattedTextLines = [];
+      return name;
+    }
 
-      let totalHerbCount = 0;
+    // 格式化劑量
+    function formatDose(num) {
+      if (optTrimZero.checked) {
+        return num.toFixed(1);
+      }
+      return parseFloat(num.toFixed(2)).toString();
+    }
 
-      groups.forEach((group, gIdx) => {
-        totalHerbCount += group.herbs.length;
+    function round(num, decimals = 2) {
+      const factor = Math.pow(10, decimals);
+      return Math.round(num * factor) / factor;
+    }
 
-        // 1. Clinical Format String:
-        // Example: 蒲公英1.5g 海螵蛸2.0g 玉竹2.0g ... BID*28天
-        const herbSegments = group.herbs.map(h => `${h.displayName}${h.formattedDaily}g`);
-        const fullLineString = `${herbSegments.join(' ')}  ${group.freq}*${group.days}天`;
-        formattedTextLines.push(fullLineString);
+    // 渲染結果
+    function renderResults(groups) {
+      quickOutputContainer.innerHTML = '';
+      groupsDetailContainer.innerHTML = '';
+      badgeCount.textContent = `${groups.length} 個分組`;
+      badgeCount.classList.remove('hidden');
+      btnCopyAll.disabled = false;
 
-        // UI Card Line
-        const lineCard = document.createElement('div');
-        lineCard.className = 'group flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 bg-white rounded-xl border border-teal-100 hover:border-teal-300 transition-all shadow-xs';
-        lineCard.innerHTML = `
-          <div class="flex-1 break-words">
-            <span class="text-slate-900 font-medium">${herbSegments.join(' ')}</span>
-            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200">
-              ${group.freq}*${group.days}天
-            </span>
+      let allTextLines = [];
+
+      groups.forEach((group, idx) => {
+        // 1. 生成該組單行格式：蒲公英1.5g 海螵蛸2.0g ... BID*28天
+        const itemsText = group.items
+          .map(it => `${it.displayName}${formatDose(it.dailyDose)}${group.unitSymbol}`)
+          .join(' ');
+        
+        const lineOutput = `${itemsText}  ${group.freq}*${group.days}天`;
+        allTextLines.push(lineOutput);
+
+        // 2. 累計數值計算
+        const groupDailyTotal = round(group.items.reduce((sum, it) => sum + it.dailyDose, 0), 2);
+        const groupSingleDoseTotal = round(groupDailyTotal / group.timesPerDay, 2);
+
+        // 3. 渲染快速預覽項目
+        const isDecoction = group.type === '飲片';
+        const typeBadgeColor = isDecoction 
+          ? 'bg-amber-100 text-amber-800 border-amber-300' 
+          : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+
+        const quickCard = document.createElement('div');
+        quickCard.className = 'p-3.5 bg-slate-50 border border-slate-200 rounded-lg transition hover:border-slate-300';
+        quickCard.innerHTML = `
+          <div class="flex items-center justify-between text-xs mb-1.5">
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 rounded text-[11px] font-semibold border ${typeBadgeColor}">
+                ${group.type}
+              </span>
+              <span class="font-bold text-slate-700">${group.freq}</span>
+              <span class="text-slate-400">·</span>
+              <span class="text-slate-600">${group.days} 天</span>
+              <span class="text-slate-400">·</span>
+              <span class="text-slate-500">${group.items.length} 味藥</span>
+            </div>
+            <button class="btnCopyLine text-xs text-slate-600 hover:text-emerald-700 font-medium px-2 py-1 rounded bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition" data-line="${escapeHtml(lineOutput)}">
+              <i class="fa-regular fa-copy"></i> 複製此行
+            </button>
           </div>
-          <button data-copy-idx="${gIdx}" class="btn-copy-single flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors border border-slate-200 hover:border-teal-200">
-            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-            複製此組
-          </button>
+          <div class="text-sm font-mono-code font-medium text-slate-900 break-all leading-relaxed bg-white p-2.5 rounded border border-slate-200 select-all">
+            ${escapeHtml(lineOutput)}
+          </div>
         `;
-        clinicalOutputContainer.appendChild(lineCard);
+        quickOutputContainer.appendChild(quickCard);
 
-        // 2. Audit Verification Card
-        const singlePacketWeight = group.timesPerDay > 0 ? (group.totalDailySum / group.timesPerDay) : group.totalDailySum;
-        const auditCard = document.createElement('div');
-        auditCard.className = 'bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs';
-
-        const tableRowsHtml = group.herbs.map(h => {
-          const isMatch = h.originalTotal !== null ? Math.abs(h.originalTotal - h.calculatedTotal) < 0.1 : true;
+        // 4. 渲染防呆核對詳細表格卡片
+        const detailCard = document.createElement('div');
+        detailCard.className = 'bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden';
+        
+        let tableRowsHtml = group.items.map((it, itemIdx) => {
           return `
-            <tr class="hover:bg-slate-50/80 transition-colors text-xs sm:text-sm">
-              <td class="px-4 py-2.5 font-medium text-slate-800">
-                ${h.displayName}
-                ${h.rawName !== h.displayName ? `<span class="text-slate-400 text-xs ml-1 font-normal">(${h.rawName})</span>` : ''}
+            <tr class="hover:bg-slate-50 transition border-b border-slate-100 last:border-b-0 text-xs">
+              <td class="py-2.5 px-3 font-mono text-slate-400 text-center">${itemIdx + 1}</td>
+              <td class="py-2.5 px-3 font-medium text-slate-800">
+                <div class="flex items-center gap-1.5">
+                  <span>${escapeHtml(it.displayName)}</span>
+                  ${it.displayName !== it.rawName ? `<span class="text-[10px] text-slate-400 font-normal">(${escapeHtml(it.rawName)})</span>` : ''}
+                </div>
               </td>
-              <td class="px-3 py-2.5 text-right font-mono text-slate-600">${h.singleDose.toFixed(2)} g</td>
-              <td class="px-3 py-2.5 text-center">
-                <span class="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-mono font-medium">${group.freq} (每日${group.timesPerDay}次)</span>
-              </td>
-              <td class="px-3 py-2.5 text-right font-mono font-bold text-teal-700 bg-teal-50/50">${h.formattedDaily} g</td>
-              <td class="px-3 py-2.5 text-center text-slate-600 font-mono">${group.days} 天</td>
-              <td class="px-4 py-2.5 text-right font-mono text-slate-600">
-                ${h.calculatedTotal.toFixed(1)} g
-                ${!isMatch ? `<span class="text-amber-500 font-bold ml-1" title="與HIS開立總量 ${h.originalTotal}g 略有差異">⚠️</span>` : ''}
-              </td>
+              <td class="py-2.5 px-3 text-right font-mono text-slate-600">${it.singleDose} <span class="text-[10px] text-slate-400">${it.unit}</span></td>
+              <td class="py-2.5 px-3 text-center text-slate-600 font-mono">× ${group.timesPerDay}</td>
+              <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 bg-emerald-50/40">${formatDose(it.dailyDose)} <span class="text-[10px]">${group.unitSymbol}</span></td>
+              <td class="py-2.5 px-3 text-right font-mono text-slate-500">${round(it.dailyDose * group.days, 1)} ${group.unitSymbol}</td>
             </tr>
           `;
         }).join('');
 
-        auditCard.innerHTML = `
-          <div class="px-4 py-3 bg-slate-50/90 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-2.5">
-              <span class="px-2.5 py-1 rounded-lg bg-teal-600 text-white font-bold text-xs">
-                ${group.freq}
+        detailCard.innerHTML = `
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold border ${typeBadgeColor}">
+                ${group.type}
               </span>
-              <span class="text-xs sm:text-sm font-bold text-slate-800">
-                服用天數：${group.days} 天 &bull; ${group.freqName}
-              </span>
-              <span class="text-xs text-slate-500">(${group.herbs.length} 味中藥)</span>
+              <span class="font-bold text-slate-800 text-sm">${group.freq} · ${group.days} 天</span>
+              <span class="text-xs text-slate-500">（每日服 ${group.timesPerDay} 次）</span>
             </div>
-            <div class="flex items-center gap-2.5 text-xs">
-              <div class="bg-white px-2.5 py-1 rounded-md border border-slate-200 text-slate-700 shadow-2xs">
-                單日總粉量: <span class="font-bold text-teal-700 font-mono">${formatDose(group.totalDailySum, fixedDecimal)}g</span>
-              </div>
-              <div class="bg-white px-2.5 py-1 rounded-md border border-slate-200 text-slate-700 shadow-2xs">
-                單包重: <span class="font-bold text-slate-900 font-mono">${formatDose(singlePacketWeight, fixedDecimal)}g</span>
-              </div>
+            <div class="flex items-center gap-4 text-xs font-medium">
+              <span class="text-slate-600">
+                單日總量: <strong class="text-slate-900 font-mono text-sm">${groupDailyTotal}</strong> ${group.unitSymbol}
+              </span>
+              <span class="text-slate-600">
+                單次/單包量: <strong class="text-slate-900 font-mono text-sm">${groupSingleDoseTotal}</strong> ${group.unitSymbol}
+              </span>
             </div>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+            <table class="w-full text-left">
               <thead>
-                <tr class="bg-slate-100/70 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  <th class="px-4 py-2">藥品名稱</th>
-                  <th class="px-3 py-2 text-right">每次劑量 (單次)</th>
-                  <th class="px-3 py-2 text-center">頻次日次</th>
-                  <th class="px-3 py-2 text-right bg-teal-50/70 text-teal-800">換算每日量</th>
-                  <th class="px-3 py-2 text-center">天數</th>
-                  <th class="px-4 py-2 text-right">全期總克數</th>
+                <tr class="bg-slate-100/70 text-slate-600 text-[11px] font-semibold uppercase tracking-wider border-b border-slate-200">
+                  <th class="py-2 px-3 text-center w-10">#</th>
+                  <th class="py-2 px-3">藥品名稱</th>
+                  <th class="py-2 px-3 text-right">每次劑量</th>
+                  <th class="py-2 px-3 text-center">日次</th>
+                  <th class="py-2 px-3 text-right text-emerald-800">換算每日劑量</th>
+                  <th class="py-2 px-3 text-right">全期總量</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-slate-100">
+              <tbody>
                 ${tableRowsHtml}
               </tbody>
             </table>
           </div>
         `;
-        groupsContainer.appendChild(auditCard);
+        groupsDetailContainer.appendChild(detailCard);
       });
 
-      statTotalHerbs.textContent = `共解析 ${totalHerbCount} 味藥品，分為 ${groups.length} 組用法`;
-
-      // Single copy button bindings
-      document.querySelectorAll('.btn-copy-single').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const idx = parseInt(btn.getAttribute('data-copy-idx'), 10);
-          if (formattedTextLines[idx]) {
-            safeClipboardCopy(formattedTextLines[idx]);
-          }
+      // 綁定單行複製事件
+      document.querySelectorAll('.btnCopyLine').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const textToCopy = e.currentTarget.getAttribute('data-line');
+          copyToClipboard(textToCopy, '已複製該分組文字！');
         });
       });
 
-      // Refresh Lucide icons in generated elements
-      lucide.createIcons();
+      // 綁定複製全部按鈕
+      btnCopyAll.onclick = () => {
+        const fullText = allTextLines.join('\n');
+        copyToClipboard(fullText, '已複製全部處方分組文字！');
+      };
     }
 
-    // --- Main Workflow Controller ---
-    function runProcessing() {
-      noticeBox.classList.add('hidden');
-      noticeContent.innerHTML = '';
-
-      const raw = rawInput.value.trim();
-      if (!raw) {
-        renderApp([], optFixedDecimal.checked);
-        return;
+    // 複製工具函式
+    function copyToClipboard(text, successMsg) {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+          showToast(successMsg);
+        }).catch(() => fallbackCopy(text, successMsg));
+      } else {
+        fallbackCopy(text, successMsg);
       }
-
-      const { items, warnings } = parseHISPrescription(raw);
-
-      if (warnings.length > 0) {
-        noticeBox.classList.remove('hidden');
-        noticeContent.innerHTML = warnings.map(w => `<p>${w}</p>`).join('');
-      }
-
-      parsedGroups = processAndGroupItems(items, optSmartName.checked, optFixedDecimal.checked);
-      renderApp(parsedGroups, optFixedDecimal.checked);
     }
 
-    // --- Event Listeners ---
-    btnParse.addEventListener('click', runProcessing);
+    function fallbackCopy(text, successMsg) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        showToast(successMsg);
+      } catch (err) {
+        showToast('複製失敗，請手動複製');
+      }
+      document.body.removeChild(textarea);
+    }
 
-    btnLoadSample.addEventListener('click', () => {
-      rawInput.value = SAMPLE_RAW_DATA;
-      runProcessing();
-      showToast('已載入您提供的 17 味 HIS 處方資料');
-    });
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      toastMsg.textContent = msg;
+      toast.classList.remove('opacity-0', 'translate-y-20');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'translate-y-20');
+      }, 2200);
+    }
 
-    btnClear.addEventListener('click', () => {
-      rawInput.value = '';
-      parsedGroups = [];
-      formattedTextLines = [];
-      noticeBox.classList.add('hidden');
-      renderApp([], optFixedDecimal.checked);
-      showToast('已清空處方內容');
-    });
-
-    btnCopyAll.addEventListener('click', () => {
-      if (formattedTextLines.length === 0) return;
-      const joined = formattedTextLines.join('\n');
-      safeClipboardCopy(joined);
-    });
-
-    optSmartName.addEventListener('change', runProcessing);
-    optFixedDecimal.addEventListener('change', runProcessing);
-
-    // Auto-parse when user pastes into textarea
-    rawInput.addEventListener('paste', () => {
-      setTimeout(runProcessing, 80);
-    });
-
-    // Auto-parse initially with the sample
-    window.addEventListener('DOMContentLoaded', () => {
-      lucide.createIcons();
-      rawInput.value = SAMPLE_RAW_DATA;
-      runProcessing();
-    });
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
   </script>
 </body>
 </html>
